@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPACE EXPLORER - Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;600;800&display=swap');
+
+        :root {
+            --nasa-blue: #0b3d91;
+            --nasa-red: #fc3d21;
+            --neon-blue: #00f3ff;
+            --neon-green: #39ff14;
+            --dark-bg: #050508;
+            --panel-bg: rgba(10, 15, 30, 0.85);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark-bg);
+            color: #e2e8f0;
+            overflow-x: hidden;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Mission Control Typography */
+        .font-mono-tech {
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        /* CRT/Scanline Effects */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+            background-size: 100% 4px;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .screen-glitch {
+            animation: glitch 0.2s linear infinite;
+        }
+
+        @keyframes glitch {
+            2%, 64% { transform: translate(2px, 0) skew(0deg); }
+            4%, 60% { transform: translate(-2px, 0) skew(0deg); }
+            62% { transform: translate(0, 0) skew(5deg); }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a10; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--neon-blue); 
+        }
+
+        /* UI Elements */
+        .btn-primary {
+            background: linear-gradient(45deg, var(--nasa-blue), #1e3a8a);
+            border: 1px solid var(--neon-blue);
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: linear-gradient(45deg, #1e3a8a, var(--neon-blue));
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
+            transform: translateY(-1px);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #475569;
+            box-shadow: none;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #7f1d1d, var(--nasa-red));
+            border: 1px solid #ff4d4d;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+        }
+        .btn-danger:hover:not(:disabled) {
+            box-shadow: 0 0 20px rgba(252, 61, 33, 0.6);
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid #1e293b;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        .telemetry-value {
+            color: var(--neon-blue);
+            text-shadow: 0 0 5px rgba(0, 243, 255, 0.5);
+        }
+        .telemetry-warning {
+            color: #fbbf24;
+            text-shadow: 0 0 5px rgba(251, 191, 36, 0.5);
+        }
+        .telemetry-critical {
+            color: #ef4444;
+            text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .grid-bg {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+        }
+
+        .starfield {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 300ms ease-out; }
+        .toast-exit { transform: translateY(0); opacity: 1; }
+        .toast-exit-active { transform: translateY(-100%); opacity: 0; transition: all 300ms ease-in; }
+
+        /* Progress Bar */
+        .progress-bar-bg { background: #1e293b; border: 1px solid #334155; }
+        .progress-bar-fill { background: var(--neon-blue); box-shadow: 0 0 10px var(--neon-blue); transition: width 0.5s linear; }
+
+    </style>
+</head>
+<body class="crt grid-bg">
+
+    <!-- Starfield Canvas -->
+    <canvas id="starfield" class="starfield"></canvas>
+
+    <!-- Header -->
+    <header class="panel border-b border-gray-800 p-3 flex justify-between items-center z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full border-2 border-[var(--nasa-red)] flex items-center justify-center text-[var(--nasa-red)] font-bold">SE</div>
+            <h1 class="text-xl font-bold tracking-widest text-white">SPACE EXPLORER <span class="text-xs text-gray-500 font-mono-tech">v1.0.4</span></h1>
+        </div>
+        <div class="flex items-center gap-4 font-mono-tech text-sm">
+            <div id="auth-status" class="text-gray-400">CONNECTING TO DSN...</div>
+            <div id="clock" class="text-[var(--neon-blue)]">T-MINUS 00:00:00</div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="app-container" class="flex-1 overflow-y-auto relative z-10 p-4 lg:p-8 flex flex-col">
+        <!-- Dynamic Content Injected Here -->
+    </main>
+
+    <!-- Global Modal System -->
+    <div id="modal-container" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="panel p-6 rounded-lg max-w-md w-full border border-gray-700 shadow-2xl relative">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4 text-white uppercase tracking-wider"></h2>
+            <p id="modal-content" class="text-gray-300 mb-6 font-mono-tech leading-relaxed"></p>
+            <div class="flex justify-end gap-3" id="modal-actions">
+                <!-- Buttons injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification System -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <!-- Firebase SDK & Main Logic -->
+    <script>
+        // GitHub Pages deployment uses browser-local saves (no backend required).
+        const SAVE_KEY = 'spaceExplorerSave';
+
+        // --- Game Data Definitions ---
+        const MISSIONS = {
+            moon: { id: 'moon', name: "Lunar Recon", target: "Moon", budget: 1500, distance: 384400, deltaV: 5000, complexity: 1, baseScience: 100, desc: "A short hop to our nearest neighbor. Good for testing equipment.", img: "https://placehold.co/400x200/222/ddd?text=THE+MOON" },
+            mars: { id: 'mars', name: "Ares Vanguard", target: "Mars", budget: 4000, distance: 225000000, deltaV: 12000, complexity: 3, baseScience: 400, desc: "Interplanetary transit required. Pack robust life support and radiation shielding.", img: "https://placehold.co/400x200/421/ddd?text=MARS" },
+            europa: { id: 'europa', name: "Europa Clipper", target: "Europa", budget: 8000, distance: 628000000, deltaV: 18000, complexity: 5, baseScience: 800, desc: "Extreme radiation environment. High scientific payoff for astrobiology.", img: "https://placehold.co/400x200/123/ddd?text=EUROPA" }
+        };
+
+        const COMPONENTS = {
+            core: [
+                { id: 'probe_basic', name: 'Explorer Core (Uncrewed)', cost: 200, mass: 300, powerGen: 0, powerDraw: 5, type: 'core', desc: 'Basic automated probe core.' },
+                { id: 'probe_adv', name: 'AI Core (Uncrewed)', cost: 500, mass: 450, powerGen: 0, powerDraw: 15, type: 'core', desc: 'Advanced autonomous operations.' },
+                { id: 'module_crew', name: 'Command Module (Crewed)', cost: 1200, mass: 2500, powerGen: 0, powerDraw: 40, type: 'core', desc: 'Supports 3 astronauts. Heavy.' }
+            ],
+            propulsion: [
+                { id: 'prop_chem', name: 'Chemical Thruster', cost: 300, mass: 1000, powerGen: 0, powerDraw: 0, thrust: 5000, efficiency: 1, type: 'propulsion', desc: 'High thrust, low efficiency.' },
+                { id: 'prop_ion', name: 'Ion Engine', cost: 800, mass: 200, powerGen: 0, powerDraw: 50, thrust: 100, efficiency: 10, type: 'propulsion', desc: 'Low thrust, very high efficiency. Needs massive power.' },
+                { id: 'prop_nuke', name: 'Nuclear Thermal', cost: 1500, mass: 1500, powerGen: 0, powerDraw: 10, thrust: 3000, efficiency: 5, type: 'propulsion', desc: 'Balanced thrust and high efficiency. Heavy.' }
+            ],
+            power: [
+                { id: 'pwr_solar_s', name: 'Small Solar Array', cost: 100, mass: 50, powerGen: 20, powerDraw: 0, type: 'power', desc: 'Loses efficiency far from sun.' },
+                { id: 'pwr_solar_l', name: 'Large Solar Array', cost: 300, mass: 150, powerGen: 80, powerDraw: 0, type: 'power', desc: 'Massive folding panels.' },
+                { id: 'pwr_rtg', name: 'RTG', cost: 600, mass: 100, powerGen: 30, powerDraw: 0, type: 'power', desc: 'Constant power regardless of distance.' }
+            ],
+            instruments: [
+                { id: 'inst_cam', name: 'High-Res Camera', cost: 150, mass: 20, powerGen: 0, powerDraw: 5, science: 50, type: 'instrument' },
+                { id: 'inst_spec', name: 'Mass Spectrometer', cost: 400, mass: 50, powerGen: 0, powerDraw: 15, science: 150, type: 'instrument' },
+                { id: 'inst_radar', name: 'Ground-Penetrating Radar', cost: 600, mass: 120, powerGen: 0, powerDraw: 30, science: 250, type: 'instrument' },
+                { id: 'inst_drill', name: 'Surface Drill', cost: 300, mass: 80, powerGen: 0, powerDraw: 20, science: 100, type: 'instrument' }
+            ]
+        };
+
+        const RANDOM_EVENTS = [
+            { id: 'solar_flare', name: 'Solar Flare', msg: 'A massive solar flare is disrupting communications and electronics!', effect: 'power_drain', severity: 20 },
+            { id: 'micrometeoroid', name: 'Micrometeoroid Impact', msg: 'Hull breach detected in non-critical sector. Slight loss of fuel.', effect: 'fuel_leak', severity: 10 },
+            { id: 'software_glitch', name: 'Nav Computer Glitch', msg: 'Navigation system requires reboot. Off-course drift detected.', effect: 'time_delay', severity: 5 },
+            { id: 'science_bonus', name: 'Unexpected Phenomenon', msg: 'Sensors picked up anomalous readings. Bonus science data gathered!', effect: 'science_boost', severity: 50 }
+        ];
+
+        // --- Game State Engine ---
+        class GameEngine {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.state = 'MENU'; // MENU, MISSION_SELECT, CONFIG, LAUNCH, TRAVEL, EXPLORE, MARS_SIM, REPORT
+                this.mission = null;
+                this.budget = 0;
+                this.vessel = {
+                    components: [],
+                    stats: { cost: 0, mass: 0, powerGen: 0, powerDraw: 0, netPower: 0, maxDeltaV: 0 },
+                    fuel: 100, // percentage
+                    health: 100 // percentage
+                };
+                this.travel = {
+                    distanceCovered: 0,
+                    daysElapsed: 0,
+                    eventsEncountered: []
+                };
+                this.exploration = {
+                    scienceGathered: 0,
+                    instrumentsUsed: [],
+                    marsSim: null
+                };
+                this.loopId = null;
+                this.lastTick = 0;
+            }
+
+            addComponent(comp) {
+                this.vessel.components.push(comp);
+                this.calculateStats();
+            }
+
+            removeComponent(index) {
+                this.vessel.components.splice(index, 1);
+                this.calculateStats();
+            }
+
+            calculateStats() {
+                let stats = { cost: 0, mass: 0, powerGen: 0, powerDraw: 0, netPower: 0, maxDeltaV: 0 };
+                let baseThrust = 0;
+                let baseEfficiency = 0;
+
+                this.vessel.components.forEach(c => {
+                    stats.cost += c.cost;
+                    stats.mass += c.mass;
+                    stats.powerGen += c.powerGen;
+                    stats.powerDraw += c.powerDraw;
+                    if (c.type === 'propulsion') {
+                        baseThrust += c.thrust;
+                        baseEfficiency += c.efficiency;
+                    }
+                });
+
+                stats.netPower = stats.powerGen - stats.powerDraw;
+                
+                // Simplified Delta-V calculation for game feel
+                if (stats.mass > 0 && baseThrust > 0) {
+                    stats.maxDeltaV = Math.floor((baseThrust * baseEfficiency * 1000) / (stats.mass * 0.1));
+                } else {
+                    stats.maxDeltaV = 0;
+                }
+
+                this.vessel.stats = stats;
+            }
+
+            canLaunch() {
+                if (!this.mission) return { valid: false, msg: "No mission selected." };
+                let hasCore = this.vessel.components.some(c => c.type === 'core');
+                let hasProp = this.vessel.components.some(c => c.type === 'propulsion');
+                let hasPower = this.vessel.components.some(c => c.type === 'power');
+
+                if (!hasCore) return { valid: false, msg: "Vessel requires a Core Module." };
+                if (!hasProp) return { valid: false, msg: "Vessel requires a Propulsion system." };
+                if (!hasPower) return { valid: false, msg: "Vessel requires a Power generation system." };
+                if (this.vessel.stats.cost > this.budget) return { valid: false, msg: "Over budget constraint!" };
+                if (this.vessel.stats.netPower < 0) return { valid: false, msg: "Net power is negative. Systems will fail." };
+                if (this.vessel.stats.maxDeltaV < this.mission.deltaV) return { valid: false, msg: `Insufficient Delta-V. Needs ${this.mission.deltaV} m/s.` };
+
+                return { valid: true, msg: "All systems GO." };
+            }
+
+            // Export state for saving
+            exportData() {
+                return JSON.stringify({
+                    mission: this.mission,
+                    budget: this.budget,
+                    vessel: this.vessel,
+                    travel: this.travel,
+                    exploration: this.exploration,
+                    state: this.state
+                });
+            }
+
+            // Import state
+            importData(jsonString) {
+                try {
+                    const data = JSON.parse(jsonString);
+                    this.mission = data.mission;
+                    this.budget = data.budget;
+                    this.vessel = data.vessel;
+                    this.travel = data.travel;
+                    this.exploration = data.exploration;
+                    this.state = data.state;
+                    return true;
+                } catch(e) {
+                    console.error("Save data corrupted", e);
+                    return false;
+                }
+            }
+        }
+
+        const engine = new GameEngine();
+
+        // Reliable local save system for static hosting (GitHub Pages).
+        function persistGame() {
+            // Do not overwrite a real save with the initial/menu screen state.
+            if (engine.state === 'MENU') return false;
+            try {
+                localStorage.setItem(SAVE_KEY, engine.exportData());
+                return true;
+            } catch (error) {
+                console.error('Unable to save mission telemetry:', error);
+                return false;
+            }
+        }
+
+        window.saveGame = () => {
+            const saved = persistGame();
+            showToast(saved ? 'Telemetry data saved on this device.' : 'Save failed. Check browser storage settings.', saved ? 'success' : 'error');
+        };
+
+        window.addEventListener('beforeunload', () => {
+            // Keep the latest state if the player refreshes or closes the tab.
+            persistGame();
+        });
+
+        // --- UI & Rendering Manager ---
+        const UI = {
+            app: document.getElementById('app-container'),
+            
+            clear() {
+                this.app.innerHTML = '';
+            },
+
+            renderMenu() {
+                this.clear();
+                engine.state = 'MENU';
+                this.app.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-center space-y-8 animate-fade-in">
+                        <div>
+                            <h1 class="text-6xl font-bold tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-[var(--nasa-blue)] to-[var(--neon-blue)] drop-shadow-[0_0_10px_rgba(0,243,255,0.5)]">SPACE EXPLORER</h1>
+                            <p class="text-xl text-gray-400 font-mono-tech max-w-2xl mx-auto">MISSION MANAGEMENT & ENGINEERING SIMULATION</p>
+                        </div>
+                        <div class="flex flex-col gap-4 w-full max-w-md">
+                            <button id="btn-new-game" class="btn-primary py-4 rounded font-bold text-lg">Initialize New Mission</button>
+                            <button id="btn-load-game" class="panel py-4 rounded font-bold text-lg hover:bg-gray-800 transition border border-gray-600">Load Telemetry Data</button>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('btn-new-game').addEventListener('click', () => {
+                    engine.reset();
+                    this.renderMissionSelect();
+                });
+
+                document.getElementById('btn-load-game').addEventListener('click', () => {
+                    const saveData = localStorage.getItem(SAVE_KEY);
+                    if (!saveData) {
+                        showToast('No saved telemetry found on this device.', 'warning');
+                        return;
+                    }
+                    if (!engine.importData(saveData)) {
+                        showToast('Saved telemetry could not be read.', 'error');
+                        return;
+                    }
+                    showToast('Telemetry loaded successfully.', 'success');
+                    // Restore the exact screen, including the dedicated Mars simulator.
+                    switch (engine.state) {
+                        case 'MISSION_SELECT': this.renderMissionSelect(); break;
+                        case 'CONFIG': this.renderConfig(); break;
+                        case 'LAUNCH': this.renderLaunch(); break;
+                        case 'TRAVEL': this.renderTravel(); break;
+                        case 'MARS_SIM': this.renderMarsSimulation(); break;
+                        case 'EXPLORE':
+                            if (engine.mission && engine.mission.id === 'mars') this.renderMarsSimulation();
+                            else this.renderExplore();
+                            break;
+                        case 'REPORT': this.renderReport(); break;
+                        default: this.renderMenu();
+                    }
+                });
+            },
+
+            renderMissionSelect() {
+                this.clear();
+                engine.state = 'MISSION_SELECT';
+                persistGame();
+                let html = `
+                    <div class="mb-6 flex justify-between items-end">
+                        <div>
+                            <h2 class="text-3xl font-bold text-white uppercase tracking-widest border-b-2 border-[var(--nasa-blue)] pb-2 inline-block">Select Mission Parameters</h2>
+                            <p class="text-gray-400 font-mono-tech mt-2">Choose target destination to establish baseline budget and requirements.</p>
+                        </div>
+                        <button id="btn-back-menu" class="px-4 py-2 border border-gray-600 rounded hover:bg-gray-800 transition font-mono-tech">Abort</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                `;
+
+                for (const [key, m] of Object.entries(MISSIONS)) {
+                    html += `
+                        <div class="panel rounded-lg overflow-hidden flex flex-col transition-transform hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(0,243,255,0.2)] cursor-pointer group" onclick="selectMission('${key}')">
+                            <img src="${m.img}" alt="${m.target}" class="w-full h-40 object-cover opacity-70 group-hover:opacity-100 transition-opacity">
+                            <div class="p-5 flex-1 flex flex-col">
+                                <h3 class="text-2xl font-bold text-white mb-2">${m.name}</h3>
+                                <p class="text-sm text-gray-400 mb-4 flex-1">${m.desc}</p>
+                                <div class="font-mono-tech text-sm space-y-1 bg-gray-900/50 p-3 rounded">
+                                    <div class="flex justify-between"><span class="text-gray-500">Target:</span> <span class="text-white">${m.target}</span></div>
+                                    <div class="flex justify-between"><span class="text-gray-500">Distance:</span> <span class="text-[var(--neon-blue)]">${(m.distance/1000000).toFixed(1)}M km</span></div>
+                                    <div class="flex justify-between"><span class="text-gray-500">Req Δv:</span> <span class="text-[var(--nasa-red)]">${m.deltaV} m/s</span></div>
+                                    <div class="flex justify-between"><span class="text-gray-500">Budget:</span> <span class="text-[#39ff14]">$${m.budget}M</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+                this.app.innerHTML = html;
+
+                document.getElementById('btn-back-menu').addEventListener('click', () => this.renderMenu());
+                
+                // Expose function to global for inline onclick (dirty but fast for single file)
+                window.selectMission = (key) => {
+                    engine.mission = MISSIONS[key];
+                    engine.budget = engine.mission.budget;
+                    this.renderConfig();
+                };
+            },
+
+            renderConfig() {
+                this.clear();
+                engine.state = 'CONFIG';
+                persistGame();
+                
+                // Real-time stat calc
+                engine.calculateStats();
+                const stats = engine.vessel.stats;
+                const vCheck = engine.canLaunch();
+
+                let html = `
+                    <div class="flex flex-col lg:flex-row gap-6 h-full">
+                        <!-- Component Catalog (Left) -->
+                        <div class="flex-1 flex flex-col h-full overflow-hidden panel rounded-lg border border-gray-700">
+                            <div class="p-4 border-b border-gray-700 bg-gray-800/50 flex justify-between items-center sticky top-0">
+                                <h2 class="text-xl font-bold uppercase tracking-wider">Vessel Assembly Facility</h2>
+                                <div class="font-mono-tech text-sm space-x-4">
+                                    <span class="text-gray-400">Target: <span class="text-white">${engine.mission.target}</span></span>
+                                    <span class="text-gray-400">Budget: <span class="${stats.cost > engine.budget ? 'telemetry-critical' : 'text-[#39ff14]'}">$${stats.cost}M / $${engine.budget}M</span></span>
+                                </div>
+                            </div>
+                            <div class="p-4 overflow-y-auto flex-1 space-y-8" id="catalog-container">
+                `;
+
+                // Render Categories
+                const renderCategory = (title, categoryKey) => {
+                    let catHtml = `<div><h3 class="text-lg text-[var(--neon-blue)] font-mono-tech border-b border-[var(--neon-blue)]/30 pb-1 mb-4">${title}</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+                    COMPONENTS[categoryKey].forEach(comp => {
+                        catHtml += `
+                            <div class="bg-gray-900 border border-gray-700 p-3 rounded hover:border-gray-500 transition relative">
+                                <h4 class="font-bold text-white mb-1">${comp.name}</h4>
+                                <p class="text-xs text-gray-400 mb-3 h-8">${comp.desc || ''}</p>
+                                <div class="text-xs font-mono-tech space-y-1 mb-10">
+                                    <div class="flex justify-between"><span>Cost:</span> <span class="text-green-400">$${comp.cost}M</span></div>
+                                    <div class="flex justify-between"><span>Mass:</span> <span class="text-gray-300">${comp.mass} kg</span></div>
+                                    ${comp.powerGen > 0 ? `<div class="flex justify-between"><span>Power Gen:</span> <span class="text-yellow-400">+${comp.powerGen} kW</span></div>` : ''}
+                                    ${comp.powerDraw > 0 ? `<div class="flex justify-between"><span>Power Draw:</span> <span class="text-red-400">-${comp.powerDraw} kW</span></div>` : ''}
+                                    ${comp.thrust ? `<div class="flex justify-between"><span>Thrust:</span> <span class="text-blue-400">${comp.thrust} kN</span></div>` : ''}
+                                </div>
+                                <button onclick="addComponent('${categoryKey}', '${comp.id}')" class="absolute bottom-3 right-3 left-3 bg-gray-800 hover:bg-gray-700 text-white text-xs py-2 rounded font-bold uppercase tracking-wider transition border border-gray-600">Install</button>
+                            </div>
+                        `;
+                    });
+                    catHtml += `</div></div>`;
+                    return catHtml;
+                };
+
+                html += renderCategory("1. Core Modules", "core");
+                html += renderCategory("2. Propulsion Systems", "propulsion");
+                html += renderCategory("3. Power Systems", "power");
+                html += renderCategory("4. Scientific Instruments", "instruments");
+
+                html += `
+                            </div>
+                        </div>
+
+                        <!-- Current Configuration & Stats (Right) -->
+                        <div class="w-full lg:w-96 flex flex-col gap-4">
+                            <!-- Telemetry Panel -->
+                            <div class="panel p-5 rounded-lg border border-gray-700">
+                                <h3 class="text-lg font-bold uppercase mb-4 text-white">Projected Telemetry</h3>
+                                <div class="font-mono-tech text-sm space-y-3">
+                                    <div class="flex justify-between border-b border-gray-800 pb-1">
+                                        <span class="text-gray-400">Total Mass</span>
+                                        <span class="text-white">${stats.mass} kg</span>
+                                    </div>
+                                    <div class="flex justify-between border-b border-gray-800 pb-1">
+                                        <span class="text-gray-400">Net Power</span>
+                                        <span class="${stats.netPower < 0 ? 'telemetry-critical' : (stats.netPower > 0 ? 'text-green-400' : 'text-gray-400')}">${stats.netPower > 0 ? '+' : ''}${stats.netPower} kW</span>
+                                    </div>
+                                    <div class="flex justify-between border-b border-gray-800 pb-1">
+                                        <span class="text-gray-400">Est. Delta-V</span>
+                                        <span class="${stats.maxDeltaV < engine.mission.deltaV ? 'telemetry-warning' : 'text-blue-400'}">${stats.maxDeltaV} m/s</span>
+                                    </div>
+                                    <div class="flex justify-between border-b border-gray-800 pb-1">
+                                        <span class="text-gray-400">Req. Delta-V</span>
+                                        <span class="text-gray-500">${engine.mission.deltaV} m/s</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-6 p-3 rounded text-xs font-mono-tech ${vCheck.valid ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-red-900/30 text-red-400 border border-red-800'}">
+                                    STATUS: ${vCheck.msg}
+                                </div>
+                            </div>
+
+                            <!-- Installed Parts -->
+                            <div class="panel flex-1 p-5 rounded-lg border border-gray-700 overflow-hidden flex flex-col">
+                                <h3 class="text-lg font-bold uppercase mb-4 text-white">Installed Systems</h3>
+                                <div class="flex-1 overflow-y-auto pr-2 space-y-2 font-mono-tech text-xs" id="installed-list">
+                                    ${engine.vessel.components.length === 0 ? '<div class="text-gray-500 italic">No components installed.</div>' : ''}
+                                    ${engine.vessel.components.map((c, i) => `
+                                        <div class="flex justify-between items-center bg-gray-800/50 p-2 rounded border border-gray-700 group">
+                                            <span class="truncate pr-2 text-gray-300">${c.name}</span>
+                                            <button onclick="removeComponent(${i})" class="text-red-500 opacity-50 group-hover:opacity-100 hover:text-red-400 px-2 py-1 bg-black/50 rounded">X</button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="flex gap-2 mt-auto">
+                                <button onclick="saveGame()" class="flex-1 py-3 panel rounded text-white font-bold uppercase tracking-wider text-sm hover:bg-gray-800 border border-gray-600 transition">Save Data</button>
+                                <button id="btn-init-launch" class="flex-[2] py-3 btn-primary rounded text-white font-bold uppercase tracking-wider text-sm" ${!vCheck.valid ? 'disabled' : ''}>Initiate Launch sequence</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.app.innerHTML = html;
+
+                document.getElementById('btn-init-launch')?.addEventListener('click', () => {
+                    this.renderLaunch();
+                });
+
+                window.addComponent = (cat, id) => {
+                    const comp = COMPONENTS[cat].find(c => c.id === id);
+                    if(comp) engine.addComponent({...comp}); // clone
+                    this.renderConfig();
+                };
+
+                window.removeComponent = (index) => {
+                    engine.removeComponent(index);
+                    this.renderConfig();
+                };
+
+            },
+
+            renderLaunch() {
+                this.clear();
+                engine.state = 'LAUNCH';
+                
+                this.app.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center relative">
+                        <div class="absolute inset-0 bg-[url('https://placehold.co/1920x1080/050508/0a0a10')] bg-cover bg-center opacity-30"></div>
+                        
+                        <div class="z-10 text-center w-full max-w-2xl panel p-8 rounded-xl border border-gray-700 shadow-2xl">
+                            <h2 class="text-3xl font-bold uppercase tracking-widest text-[var(--nasa-red)] mb-2 screen-glitch" id="launch-title">PRE-LAUNCH SEQUENCE</h2>
+                            <p class="font-mono-tech text-gray-400 mb-8" id="launch-status">Aligning inertial measurement units...</p>
+                            
+                            <div class="text-7xl font-mono-tech font-bold text-white mb-8 drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" id="countdown">T-10</div>
+                            
+                            <div class="w-full bg-gray-900 rounded-full h-4 mb-4 border border-gray-700 overflow-hidden">
+                                <div class="bg-[var(--neon-blue)] h-4 rounded-full transition-all duration-1000 ease-linear shadow-[0_0_10px_var(--neon-blue)]" style="width: 0%" id="launch-progress"></div>
+                            </div>
+                            
+                            <div class="grid grid-cols-3 gap-4 text-xs font-mono-tech text-left mt-8 p-4 bg-black/50 rounded border border-gray-800">
+                                <div id="sys-pwr" class="text-gray-500">[ PWR: CHK ]</div>
+                                <div id="sys-nav" class="text-gray-500">[ NAV: CHK ]</div>
+                                <div id="sys-prop" class="text-gray-500">[ PRP: CHK ]</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                let count = 10;
+                let phase = 0;
+                const counterEl = document.getElementById('countdown');
+                const progEl = document.getElementById('launch-progress');
+                const statusEl = document.getElementById('launch-status');
+                
+                const interval = setInterval(() => {
+                    count--;
+                    phase += 10;
+                    progEl.style.width = `${phase}%`;
+
+                    if(count > 5) {
+                        document.getElementById('sys-pwr').className = "text-green-400";
+                        document.getElementById('sys-pwr').innerText = "[ PWR: NOMINAL ]";
+                    } else if (count > 2) {
+                        document.getElementById('sys-nav').className = "text-green-400";
+                        document.getElementById('sys-nav').innerText = "[ NAV: LOCKED ]";
+                        statusEl.innerText = "Internal power transfer complete.";
+                    } else if (count === 1) {
+                        document.getElementById('sys-prop').className = "text-yellow-400";
+                        document.getElementById('sys-prop').innerText = "[ PRP: IGNITION ]";
+                        statusEl.innerText = "Main engine start.";
+                    }
+
+                    if (count > 0) {
+                        counterEl.innerText = `T-0${count}`;
+                    } else if (count === 0) {
+                        counterEl.innerText = "LIFTOFF";
+                        counterEl.classList.add("text-[var(--nasa-red)]");
+                        document.getElementById('sys-prop').className = "text-green-400";
+                        document.getElementById('sys-prop').innerText = "[ PRP: NOMINAL ]";
+                        statusEl.innerText = "Vehicle has cleared the tower.";
+                    } else if (count <= -3) {
+                        clearInterval(interval);
+                        this.renderTravel();
+                    }
+                }, 1000);
+            },
+
+            renderTravel() {
+                this.clear();
+                if (engine.loopId) clearInterval(engine.loopId);
+                engine.loopId = null;
+                engine.state = 'TRAVEL';
+                persistGame();
+                
+                this.app.innerHTML = `
+                    <div class="flex flex-col h-full gap-4">
+                        <!-- Top HUD -->
+                        <div class="panel p-4 flex justify-between items-center border border-gray-700 rounded shadow-md">
+                            <div>
+                                <div class="text-xs text-gray-500 font-mono-tech uppercase">Destination</div>
+                                <div class="text-xl font-bold text-white tracking-widest uppercase">${engine.mission.target}</div>
+                            </div>
+                            <div class="text-center w-1/2">
+                                <div class="text-xs text-gray-500 font-mono-tech uppercase flex justify-between mb-1">
+                                    <span>Earth</span>
+                                    <span id="dist-remaining" class="text-[var(--neon-blue)]">0 km remaining</span>
+                                    <span>${engine.mission.target}</span>
+                                </div>
+                                <div class="w-full bg-gray-900 rounded-full h-2 border border-gray-700">
+                                    <div id="travel-progress" class="bg-gradient-to-r from-[var(--nasa-blue)] to-[var(--neon-blue)] h-2 rounded-full shadow-[0_0_10px_var(--neon-blue)] transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-gray-500 font-mono-tech uppercase">Mission Time (MET)</div>
+                                <div id="met-clock" class="text-xl font-bold text-white font-mono-tech">Day 0</div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-1 gap-4 overflow-hidden">
+                            <!-- Telemetry Sidebar -->
+                            <div class="w-64 panel border border-gray-700 rounded p-4 flex flex-col">
+                                <h3 class="font-bold text-white uppercase mb-4 border-b border-gray-600 pb-2">Vessel Telemetry</h3>
+                                <div class="space-y-4 font-mono-tech text-sm flex-1">
+                                    <div>
+                                        <div class="text-gray-500 text-xs">SYS HEALTH</div>
+                                        <div class="flex items-center gap-2">
+                                            <div class="flex-1 bg-gray-900 h-3 rounded"><div id="bar-health" class="bg-green-500 h-3 rounded" style="width: ${engine.vessel.health}%"></div></div>
+                                            <span id="txt-health" class="text-white w-10 text-right">${Math.floor(engine.vessel.health)}%</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-500 text-xs">PROP FUEL</div>
+                                        <div class="flex items-center gap-2">
+                                            <div class="flex-1 bg-gray-900 h-3 rounded"><div id="bar-fuel" class="bg-yellow-500 h-3 rounded" style="width: ${engine.vessel.fuel}%"></div></div>
+                                            <span id="txt-fuel" class="text-white w-10 text-right">${Math.floor(engine.vessel.fuel)}%</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-500 text-xs">PWR DRAW</div>
+                                        <div class="text-white">${engine.vessel.stats.powerDraw} kW</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-500 text-xs">PWR GEN</div>
+                                        <div class="text-white">${engine.vessel.stats.powerGen} kW</div>
+                                    </div>
+                                </div>
+                                <button onclick="saveGame()" class="w-full py-2 panel rounded text-gray-300 hover:text-white font-mono-tech text-xs border border-gray-600 hover:bg-gray-800 transition">SAVE TELEMETRY</button>
+                            </div>
+
+                            <!-- Main View / Logs -->
+                            <div class="flex-1 flex flex-col gap-4">
+                                <!-- Orbit Canvas Mockup -->
+                                <div class="flex-1 panel border border-gray-700 rounded relative overflow-hidden bg-black flex items-center justify-center">
+                                    <div class="absolute inset-0 opacity-20 grid-bg pointer-events-none"></div>
+                                    
+                                    <!-- Simple graphical representation -->
+                                    <div class="relative w-[80%] h-[200px] flex items-center justify-between border-b border-dashed border-gray-600">
+                                        <div class="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-500 shadow-[0_0_30px_rgba(0,100,255,0.4)] absolute left-0 -translate-y-1/2 top-1/2 flex items-center justify-center text-xs font-bold">Earth</div>
+                                        <div class="w-12 h-12 rounded-full bg-gray-700 border-2 border-gray-400 shadow-[0_0_20px_rgba(200,200,200,0.2)] absolute right-0 -translate-y-1/2 top-1/2 flex items-center justify-center text-xs font-bold text-center leading-none p-1">${engine.mission.target}</div>
+                                        
+                                        <!-- Ship Icon -->
+                                        <div id="ship-icon" class="absolute w-4 h-4 bg-[var(--neon-blue)] rotate-45 shadow-[0_0_10px_var(--neon-blue)] transition-all duration-300" style="left: 0%; top: 50%; transform: translate(-50%, -50%) rotate(45deg);"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Comm Log -->
+                                <div class="h-48 panel border border-gray-700 rounded p-4 flex flex-col">
+                                    <h3 class="font-bold text-white uppercase mb-2 text-xs border-b border-gray-800 pb-1">DSN Comm Log</h3>
+                                    <div id="comm-log" class="flex-1 overflow-y-auto font-mono-tech text-xs space-y-1 pr-2 text-gray-400 flex flex-col-reverse">
+                                        <div><span class="text-blue-400">[SYS]</span> Trans-lunar injection complete. Trajectory nominal.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Travel Game Loop
+                const totalDist = engine.mission.distance;
+                let currentDist = engine.travel.distanceCovered || 0;
+                let days = engine.travel.daysElapsed || 0;
+                
+                // Adjust speed based on deltaV (higher deltaV = faster travel visually)
+                // Just for simulation purposes, we make it take ~30-60 ticks
+                const distPerTick = totalDist / (30 + (Math.random() * 20)); 
+                
+                const logEl = document.getElementById('comm-log');
+                const addLog = (msg, type='SYS') => {
+                    const color = type === 'ERR' ? 'text-red-400' : (type === 'WARN' ? 'text-yellow-400' : 'text-blue-400');
+                    const el = document.createElement('div');
+                    el.innerHTML = `<span class="${color}">[${type}]</span> Day ${Math.floor(days)}: ${msg}`;
+                    logEl.prepend(el);
+                };
+
+                const updateHUD = () => {
+                    const prog = (currentDist / totalDist) * 100;
+                    document.getElementById('travel-progress').style.width = `${Math.min(prog, 100)}%`;
+                    document.getElementById('ship-icon').style.left = `${Math.min(prog, 100)}%`;
+                    document.getElementById('dist-remaining').innerText = `${Math.floor((totalDist - currentDist)/1000000).toLocaleString()}M km`;
+                    document.getElementById('met-clock').innerText = `Day ${Math.floor(days)}`;
+                    
+                    document.getElementById('bar-health').style.width = `${engine.vessel.health}%`;
+                    document.getElementById('txt-health').innerText = `${Math.floor(engine.vessel.health)}%`;
+                    
+                    document.getElementById('bar-fuel').style.width = `${engine.vessel.fuel}%`;
+                    document.getElementById('txt-fuel').innerText = `${Math.floor(engine.vessel.fuel)}%`;
+                    
+                    if (engine.vessel.health < 30) document.getElementById('txt-health').classList.add('telemetry-critical');
+                    if (engine.vessel.fuel < 20) document.getElementById('txt-fuel').classList.add('telemetry-warning');
+                };
+
+                const handleEvent = () => {
+                    if (Math.random() > 0.15) return; // 15% chance per tick
+                    const evt = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
+                    engine.travel.eventsEncountered.push(evt.id);
+                    
+                    if (evt.effect === 'fuel_leak') {
+                        engine.vessel.fuel = Math.max(0, engine.vessel.fuel - evt.severity);
+                        addLog(evt.msg, 'WARN');
+                    } else if (evt.effect === 'power_drain') {
+                        engine.vessel.health = Math.max(0, engine.vessel.health - (evt.severity/2));
+                        addLog(evt.msg, 'ERR');
+                    } else if (evt.effect === 'science_boost') {
+                        engine.exploration.scienceGathered += evt.severity;
+                        addLog(evt.msg, 'SYS');
+                    } else {
+                        addLog(evt.msg, 'WARN');
+                    }
+
+                    if (engine.vessel.health <= 0) {
+                        clearInterval(engine.loopId);
+                        showModal("MISSION FAILURE", "Catastrophic hull failure detected. Vessel lost.", [{text: "View Report", action: () => this.renderReport()}]);
+                    }
+                    if (engine.vessel.fuel <= 0) {
+                        clearInterval(engine.loopId);
+                        showModal("MISSION FAILURE", "Main fuel tanks depleted. Vessel stranded in deep space.", [{text: "View Report", action: () => this.renderReport()}]);
+                    }
+                };
+
+                engine.loopId = setInterval(() => {
+                    currentDist += distPerTick;
+                    days += (totalDist > 100000000 ? 5 : 0.5); // scale time based on distance
+                    
+                    // Fuel consumption based on engine efficiency
+                    engine.vessel.fuel -= (0.1 / engine.vessel.stats.maxDeltaV) * 10000; 
+                    
+                    engine.travel.distanceCovered = currentDist;
+                    engine.travel.daysElapsed = days;
+                    persistGame();
+
+                    handleEvent();
+                    updateHUD();
+
+                    if (currentDist >= totalDist) {
+                        clearInterval(engine.loopId);
+                        currentDist = totalDist;
+                        engine.travel.distanceCovered = totalDist;
+                        updateHUD();
+                        addLog(`Orbital insertion at ${engine.mission.target} successful.`, 'SYS');
+                        persistGame();
+                        setTimeout(() => {
+                            showModal("ARRIVAL CONFIRMED", `Vessel has entered stable orbit around ${engine.mission.target}. Commencing exploration protocols.`, [
+                                {text: "Begin Exploration", action: () => {
+                                    if (engine.mission && engine.mission.id === 'mars') this.renderMarsSimulation();
+                                    else this.renderExplore();
+                                }}
+                            ]);
+                        }, 1000);
+                    }
+                }, 1000);
+            },
+
+            renderExplore() {
+                if (engine.mission && engine.mission.id === 'mars') {
+                    this.renderMarsSimulation();
+                    return;
+                }
+
+                this.clear();
+                engine.state = 'EXPLORE';
+                persistGame();
+                
+                // Get installed instruments
+                const insts = engine.vessel.components.filter(c => c.type === 'instrument');
+                const canExplore = insts.length > 0;
+
+                this.app.innerHTML = `
+                    <div class="h-full flex flex-col lg:flex-row gap-6">
+                        <!-- Visual Feed -->
+                        <div class="flex-[2] panel border border-gray-700 rounded-lg overflow-hidden flex flex-col relative">
+                            <div class="absolute inset-0 z-0">
+                                <img src="${engine.mission.img}" class="w-full h-full object-cover opacity-50 grayscale hover:grayscale-0 transition duration-1000" alt="Surface">
+                                <div class="absolute inset-0 bg-black/30 crt pointer-events-none"></div>
+                            </div>
+                            
+                            <div class="relative z-10 p-4 border-b border-gray-800 bg-black/60 backdrop-blur-sm flex justify-between items-center">
+                                <div class="font-mono-tech text-[var(--nasa-red)] animate-pulse tracking-widest">● REC | CAM_FEED_01</div>
+                                <div class="font-mono-tech text-white">ALT: 250km / ORBIT: STABLE</div>
+                            </div>
+                            
+                            <div class="relative z-10 flex-1 flex items-end p-4">
+                                <div class="w-full bg-black/80 border border-gray-700 p-4 rounded font-mono-tech">
+                                    <div class="text-xs text-gray-500 mb-1">ANALYSIS TERMINAL</div>
+                                    <div id="explore-log" class="text-sm text-green-400 h-20 overflow-y-auto space-y-1">
+                                        > Awaiting instrument deployment...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Instrument Panel -->
+                        <div class="flex-1 flex flex-col gap-4">
+                            <div class="panel p-4 border border-gray-700 rounded-lg shadow">
+                                <h3 class="font-bold text-white uppercase mb-2 border-b border-gray-600 pb-2">Mission Objectives</h3>
+                                <div class="flex justify-between items-center font-mono-tech mb-4">
+                                    <span class="text-gray-400">Science Gathered:</span>
+                                    <span class="text-2xl text-[var(--neon-blue)] font-bold" id="sci-score">${engine.exploration.scienceGathered}</span>
+                                </div>
+                                <div class="w-full bg-gray-900 rounded-full h-2">
+                                    <div id="sci-bar" class="bg-[var(--neon-blue)] h-2 rounded-full transition-all" style="width: ${(engine.exploration.scienceGathered / engine.mission.baseScience) * 100}%"></div>
+                                </div>
+                                <div class="text-right text-xs text-gray-500 mt-1 font-mono-tech">Target: ${engine.mission.baseScience}</div>
+                            </div>
+
+                            <div class="panel flex-1 p-4 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+                                <h3 class="font-bold text-white uppercase mb-4 border-b border-gray-600 pb-2">Payload Instruments</h3>
+                                
+                                <div class="flex-1 overflow-y-auto space-y-3 pr-2">
+                                    ${!canExplore ? '<div class="text-red-400 font-mono-tech text-sm">NO SCIENTIFIC INSTRUMENTS INSTALLED. UNABLE TO GATHER DATA.</div>' : ''}
+                                    ${insts.map((inst, idx) => `
+                                        <div class="bg-gray-800/80 border border-gray-600 p-3 rounded flex flex-col gap-2">
+                                            <div class="flex justify-between items-center">
+                                                <span class="font-bold text-gray-200 text-sm">${inst.name}</span>
+                                                <span class="text-xs text-gray-500 font-mono-tech">PWR: -${inst.powerDraw}kW</span>
+                                            </div>
+                                            <button id="btn-inst-${idx}" onclick="runInstrument(${idx}, ${inst.science}, '${inst.name}')" class="btn-primary py-2 text-xs w-full rounded font-mono-tech ${engine.exploration.instrumentsUsed.includes(idx) ? 'opacity-50 cursor-not-allowed' : ''}" ${engine.exploration.instrumentsUsed.includes(idx) ? 'disabled' : ''}>
+                                                ${engine.exploration.instrumentsUsed.includes(idx) ? 'DATA TRANSMITTED' : 'RUN SEQUENCE'}
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                
+                                <button onclick="endMission()" class="w-full mt-4 btn-danger py-3 rounded font-bold uppercase tracking-wider shadow-[0_0_10px_rgba(252,61,33,0.3)]">Conclude Mission</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const logEl = document.getElementById('explore-log');
+                
+                window.runInstrument = (idx, science, name) => {
+                    if (engine.exploration.instrumentsUsed.includes(idx)) return;
+                    
+                    const btn = document.getElementById(`btn-inst-${idx}`);
+                    btn.disabled = true;
+                    btn.innerText = "PROCESSING...";
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('bg-gray-700');
+
+                    logEl.innerHTML += `<br>> Executing ${name} macro sequence...`;
+                    logEl.scrollTop = logEl.scrollHeight;
+
+                    setTimeout(() => {
+                        const variance = Math.floor(Math.random() * 20) - 10;
+                        const finalSci = science + variance;
+                        engine.exploration.scienceGathered += finalSci;
+                        engine.exploration.instrumentsUsed.push(idx);
+                        persistGame();
+                        
+                        btn.innerText = "DATA TRANSMITTED";
+                        btn.classList.add('opacity-50');
+                        
+                        logEl.innerHTML += `<br>> <span class="text-white">Data received. Science yield: +${finalSci}</span>`;
+                        logEl.scrollTop = logEl.scrollHeight;
+                        
+                        document.getElementById('sci-score').innerText = engine.exploration.scienceGathered;
+                        const target = engine.mission.baseScience;
+                        document.getElementById('sci-bar').style.width = `${Math.min((engine.exploration.scienceGathered/target)*100, 100)}%`;
+
+                    }, 1500);
+                };
+
+                window.endMission = () => {
+                    showModal("CONCLUDE MISSION", "Are you sure you want to end exploration and generate the final report? No further data can be gathered.", [
+                        {text: "Cancel", action: null},
+                        {text: "End Mission", action: () => this.renderReport()}
+                    ]);
+                };
+            },
+
+            addMarsLog(msg) {
+                if (!engine.exploration.marsSim) return;
+                engine.exploration.marsSim.logs.push(msg);
+                persistGame();
+            },
+
+            renderMarsSimulation() {
+                this.clear();
+                engine.state = 'MARS_SIM';
+                
+                // Initialize Mars simulation state if it doesn't exist
+                if (!engine.exploration.marsSim) {
+                    engine.exploration.marsSim = {
+                        roverDeployed: false,
+                        battery: 100,
+                        location: 0,
+                        logs: ["> Orbital insertion successful.", "> Awaiting rover deployment..."],
+                        objectives: [
+                            { id: 'soil', name: 'Analyse Martian soil', desc: 'Scan surface composition.', done: false, loc: 1, cost: 15, x: 30, y: 75 },
+                            { id: 'water', name: 'Search for ancient water', desc: 'Use ground radar in valley.', done: false, loc: 2, cost: 20, x: 50, y: 60 },
+                            { id: 'rocks', name: 'Examine rock formations', desc: 'Drill and sample.', done: false, loc: 3, cost: 25, x: 80, y: 50 },
+                            { id: 'rad', name: 'Measure radiation', desc: 'Expose dosimeter.', done: false, loc: 4, cost: 10, x: 85, y: 75 },
+                            { id: 'pano', name: 'Capture panoramic images', desc: 'High-res 360 imaging.', done: false, loc: 5, cost: 15, x: 20, y: 55 }
+                        ]
+                    };
+                }
+
+                const sim = engine.exploration.marsSim;
+                persistGame();
+
+                // Coordinate map for navigation
+                const locCoords = {
+                    0: { x: 15, y: 85 }, // Base/Lander
+                    1: { x: 30, y: 75 },
+                    2: { x: 50, y: 60 },
+                    3: { x: 80, y: 50 },
+                    4: { x: 85, y: 75 },
+                    5: { x: 20, y: 55 }
+                };
+
+                const currentCoord = locCoords[sim.location];
+
+                this.app.innerHTML = `
+                    <div class="h-full flex flex-col lg:flex-row gap-6">
+                        <!-- Main Mars Environment -->
+                        <div class="flex-[2] panel border border-gray-700 rounded-lg overflow-hidden flex flex-col relative bg-black">
+                            
+                            <!-- HUD Top -->
+                            <div class="relative z-40 bg-black/90 border-b border-gray-700 p-3 flex justify-between items-center font-mono-tech text-xs">
+                                <div class="text-[var(--nasa-red)] animate-pulse tracking-widest font-bold">● LIVE | MARS_SURFACE</div>
+                                <div class="flex flex-wrap items-center gap-3 md:gap-6">
+                                    <span class="${sim.battery < 20 ? 'text-red-500 animate-pulse' : 'text-green-400'}">BATTERY: ${sim.battery}%</span>
+                                    <span class="text-yellow-400 hidden md:inline">SOLAR: +10kW</span>
+                                    <span class="text-blue-400 hidden md:inline">TEMP: -63°C</span>
+                                    <span class="text-gray-300">COMM: OPTIMAL</span>
+                                    <button onclick="window.saveGame()" class="border border-gray-600 px-2 py-1 rounded text-white hover:border-cyan-400">SAVE</button>
+                                </div>
+                            </div>
+
+                            <!-- Pure CSS Martian Landscape -->
+                            <div class="relative flex-1 overflow-hidden bg-[#2c1010]">
+                                <!-- Sky & Atmosphere -->
+                                <div class="absolute inset-0 bg-gradient-to-b from-[#4a1d1d] via-[#8b3a3a] to-[#8b3a3a] h-[45%]"></div>
+                                <div class="absolute top-[20%] left-[60%] w-32 h-32 bg-yellow-600/30 rounded-full blur-3xl"></div>
+                                
+                                <!-- Distant Horizon / Mountains -->
+                                <div class="absolute top-[35%] left-[-10%] w-[60%] h-[20%] bg-[#5c2424] rounded-[100%] blur-sm"></div>
+                                <div class="absolute top-[38%] right-[-20%] w-[70%] h-[25%] bg-[#501c1c] rounded-[100%] blur-md"></div>
+                                
+                                <!-- Midground Terrain -->
+                                <div class="absolute top-[40%] left-[-20%] w-[150%] h-[30%] bg-[#742d2d] rounded-[50%] rotate-2 blur-sm"></div>
+                                
+                                <!-- Foreground -->
+                                <div class="absolute top-[45%] left-0 w-full h-[55%] bg-gradient-to-b from-[#8b3a3a] to-[#4a1d1d]"></div>
+                                
+                                <!-- Lander / Base -->
+                                <div class="absolute w-8 h-10 bg-gray-400 rounded-t-full border border-gray-300 shadow-[0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center flex-col gap-1 z-10 transition-transform hover:scale-110 cursor-pointer" 
+                                     style="left: 15%; top: 85%; transform: translate(-50%, -100%);"
+                                     onclick="window.moveToMarsLoc(0)">
+                                    <div class="w-1 h-3 bg-red-500 absolute -top-3"></div>
+                                    <div class="w-6 h-2 bg-gray-600 rounded-sm"></div>
+                                    <div class="w-8 h-2 bg-gray-700 rounded-sm absolute -bottom-1"></div>
+                                </div>
+                                <div class="absolute text-[10px] text-white/70 font-mono-tech z-10" style="left: 15%; top: 85%; transform: translate(-50%, 5px);">LANDER BASE</div>
+
+                                <!-- POI Nodes -->
+                                ${sim.objectives.map(obj => `
+                                    <div class="absolute z-10 flex flex-col items-center gap-1 group cursor-pointer"
+                                        style="left: ${obj.x}%; top: ${obj.y}%; transform: translate(-50%, -50%);"
+                                        onclick="window.moveToMarsLoc(${obj.loc})">
+                                        <div class="text-[10px] font-mono-tech ${obj.done ? 'text-green-400' : 'text-yellow-400'} opacity-0 group-hover:opacity-100 transition whitespace-nowrap bg-black/80 px-2 py-1 border border-gray-600 rounded absolute -top-8 pointer-events-none">${obj.name}</div>
+                                        <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center ${obj.done ? 'bg-green-500 border-green-300 shadow-[0_0_10px_green]' : 'bg-yellow-500 border-yellow-300 shadow-[0_0_10px_yellow] hover:animate-pulse'}">
+                                            <span class="text-[8px] font-bold text-black">${obj.loc}</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+
+                                <!-- Rover -->
+                                ${sim.roverDeployed ? `
+                                    <div id="mars-rover" class="absolute w-8 h-5 transition-all duration-1000 ease-in-out z-20 pointer-events-none" 
+                                         style="left: ${currentCoord.x}%; top: ${currentCoord.y}%; transform: translate(-50%, -100%);">
+                                        <div class="w-full h-full bg-[var(--neon-blue)] rounded-sm border border-blue-200 shadow-[0_0_20px_var(--neon-blue)] relative">
+                                            <div class="absolute -left-1 bottom-0 w-3 h-3 rounded-full bg-gray-800 border border-gray-500"></div>
+                                            <div class="absolute -right-1 bottom-0 w-3 h-3 rounded-full bg-gray-800 border border-gray-500"></div>
+                                            <div class="absolute -top-3 left-1/2 -translate-x-1/2 w-[2px] h-4 bg-gray-300"></div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="absolute inset-0 crt pointer-events-none z-30"></div>
+                            </div>
+
+                            <!-- Operation Log -->
+                            <div class="relative z-40 bg-black/90 border-t border-gray-700 p-3 h-32 overflow-y-auto font-mono-tech text-xs space-y-1 text-gray-300" id="mars-log">
+                                ${sim.logs.map(l => `<div>${l}</div>`).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Sidebar Controls -->
+                        <div class="flex-1 flex flex-col gap-4 overflow-y-auto">
+                            
+                            <!-- Objectives Panel -->
+                            <div class="panel p-4 border border-gray-700 rounded-lg shadow">
+                                <div class="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
+                                    <h3 class="font-bold text-white uppercase">Surface Objectives</h3>
+                                    <span class="text-[var(--neon-blue)] font-mono-tech text-sm">SCI: ${engine.exploration.scienceGathered}</span>
+                                </div>
+                                <div class="space-y-3 font-mono-tech text-xs pr-2">
+                                    ${sim.objectives.map(obj => `
+                                        <div class="p-3 rounded border transition ${obj.done ? 'bg-green-900/20 border-green-800/50 text-green-400' : 'bg-gray-800/50 border-gray-600 text-gray-300'}">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="font-bold text-sm text-white">${obj.name}</span>
+                                                <span class="bg-black/50 px-1 rounded">LOC ${obj.loc}</span>
+                                            </div>
+                                            <div class="text-gray-400 mb-2">${obj.desc}</div>
+                                            ${!obj.done && sim.location === obj.loc && sim.roverDeployed ? `
+                                                <button onclick="window.executeMarsObjective('${obj.id}')" class="w-full btn-primary py-2 rounded font-bold tracking-wider">EXECUTE (-${obj.cost}% BAT)</button>
+                                            ` : ''}
+                                            ${obj.done ? '<div class="text-green-500 font-bold tracking-widest text-center bg-black/30 py-1 rounded mt-2">DATA TRANSMITTED</div>' : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Rover Commands -->
+                            <div class="panel p-4 border border-gray-700 rounded-lg flex flex-col gap-3 shrink-0">
+                                <h3 class="font-bold text-white uppercase border-b border-gray-600 pb-2">Rover Command Uplink</h3>
+                                ${!sim.roverDeployed ? `
+                                    <p class="text-xs text-gray-400 font-mono-tech mb-2">Awaiting deployment command to release rover from lander chassis.</p>
+                                    <button onclick="window.deployMarsRover()" class="btn-primary py-3 rounded font-bold uppercase tracking-wider text-sm">Deploy Surface Rover</button>
+                                ` : `
+                                    <button onclick="window.rechargeRover()" class="panel py-3 rounded text-yellow-400 border border-yellow-600 hover:bg-yellow-900/30 transition font-bold text-sm tracking-wider uppercase">Wait & Recharge (+25% BAT)</button>
+                                    <div class="text-[10px] text-gray-500 font-mono-tech bg-black/50 p-2 rounded border border-gray-800">
+                                        > Click numbered POI nodes on the map to navigate.<br>
+                                        > Traversing terrain consumes 10% battery capacity.
+                                    </div>
+                                `}
+                            </div>
+                            
+                            <button onclick="window.endMission()" class="mt-auto shrink-0 btn-danger py-4 rounded font-bold uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(252,61,33,0.3)]">Conclude Mission & View Report</button>
+                        </div>
+                    </div>
+                `;
+
+                // Auto-scroll the log to the bottom
+                const logEl = document.getElementById('mars-log');
+                if (logEl) logEl.scrollTop = logEl.scrollHeight;
+
+                window.deployMarsRover = () => {
+                    sim.roverDeployed = true;
+                    this.addMarsLog("> Rover successfully deployed to surface. Ready for navigation.");
+                    this.renderMarsSimulation();
+                };
+
+                window.moveToMarsLoc = (locId) => {
+                    if (!sim.roverDeployed) return;
+                    if (sim.location === locId) return;
+
+                    const cost = 10;
+                    if (sim.battery < cost) {
+                        this.addMarsLog("> ERROR: Insufficient battery to traverse terrain.");
+                        this.renderMarsSimulation(); // Re-render to show updated log
+                        return;
+                    }
+
+                    sim.battery -= cost;
+                    sim.location = locId;
+                    this.addMarsLog(`> Navigating to LOC ${locId}... Arrival confirmed.`);
+                    this.renderMarsSimulation();
+                };
+
+                window.executeMarsObjective = (objId) => {
+                    const obj = sim.objectives.find(o => o.id === objId);
+                    if (!obj || obj.done) return;
+
+                    if (sim.battery < obj.cost) {
+                        this.addMarsLog(`> ERROR: Insufficient battery to execute [${obj.name}].`);
+                        this.renderMarsSimulation();
+                        return;
+                    }
+
+                    sim.battery -= obj.cost;
+                    obj.done = true;
+                    
+                    // Add substantial science score per objective
+                    const sciYield = 100;
+                    engine.exploration.scienceGathered += sciYield;
+                    
+                    this.addMarsLog(`> Executing [${obj.name}]... Success.`);
+                    this.addMarsLog(`> Data packed and transmitted to DSN. (+${sciYield} SCI)`);
+                    
+                    this.renderMarsSimulation();
+                };
+
+                window.rechargeRover = () => {
+                    if (sim.battery >= 100) {
+                        this.addMarsLog("> Battery already at maximum capacity.");
+                        return;
+                    }
+                    sim.battery = Math.min(100, sim.battery + 25);
+                    this.addMarsLog("> Rover entering standby mode. Solar arrays engaged. Recharging...");
+                    this.renderMarsSimulation();
+                };
+
+                window.endMission = () => {
+                    showModal("CONCLUDE MISSION", "Are you sure you want to end exploration and generate the final report? No further data can be gathered.", [
+                        {text: "Cancel", action: null},
+                        {text: "End Mission", action: () => this.renderReport()}
+                    ]);
+                };
+            },
+
+            renderReport() {
+                this.clear();
+                engine.state = 'REPORT';
+                persistGame();
+                
+                // Calculate success metrics
+                const targetSci = engine.mission?.baseScience || 1;
+                const sciGathered = engine.exploration.scienceGathered;
+                const sciPercent = Math.min((sciGathered / targetSci) * 100, 100);
+                
+                const budgetUsed = engine.vessel.stats.cost;
+                const budgetLimit = engine.budget;
+                const budgetEff = 100 - ((budgetUsed / budgetLimit) * 100);
+
+                let status = "SUCCESS";
+                let statusColor = "text-green-500";
+                
+                if (engine.vessel.health <= 0 || engine.vessel.fuel <= 0) {
+                    status = "FAILURE";
+                    statusColor = "text-[var(--nasa-red)]";
+                } else if (sciPercent < 50) {
+                    status = "PARTIAL SUCCESS";
+                    statusColor = "text-yellow-500";
+                }
+
+                let score = Math.floor((sciGathered * 10) + (budgetEff * 5) + engine.vessel.health);
+                if (status === "FAILURE") score = Math.floor(score * 0.1);
+
+                this.app.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center p-4">
+                        <div class="panel w-full max-w-3xl p-8 rounded-lg border border-gray-700 shadow-2xl relative overflow-hidden">
+                            <!-- Watermark -->
+                            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-9xl font-bold opacity-5 pointer-events-none rotate-12 whitespace-nowrap">CLASSIFIED</div>
+                            
+                            <div class="flex justify-between items-end border-b-2 border-gray-600 pb-4 mb-6">
+                                <div>
+                                    <h2 class="text-4xl font-bold tracking-widest text-white uppercase">Mission Report</h2>
+                                    <div class="text-sm font-mono-tech text-gray-400 mt-1">OP: ${engine.mission?.name || 'UNKNOWN'} // TARGET: ${engine.mission?.target || 'N/A'}</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs font-mono-tech text-gray-500">FINAL STATUS</div>
+                                    <div class="text-2xl font-bold tracking-widest ${statusColor} animate-pulse">${status}</div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                                <div class="space-y-4 font-mono-tech">
+                                    <div class="bg-gray-800/50 p-3 rounded border border-gray-700">
+                                        <div class="text-xs text-gray-500 mb-1">SCIENCE GATHERED</div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-xl text-white">${sciGathered}</span>
+                                            <span class="text-sm text-gray-400">Target: ${targetSci}</span>
+                                        </div>
+                                        <div class="w-full bg-gray-900 h-1 mt-2"><div class="bg-green-500 h-1" style="width: ${sciPercent}%"></div></div>
+                                    </div>
+                                    
+                                    <div class="bg-gray-800/50 p-3 rounded border border-gray-700">
+                                        <div class="text-xs text-gray-500 mb-1">BUDGET EFFICIENCY</div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-xl text-white">$${budgetUsed}M used</span>
+                                            <span class="text-sm text-gray-400">Limit: $${budgetLimit}M</span>
+                                        </div>
+                                        <div class="w-full bg-gray-900 h-1 mt-2"><div class="bg-blue-500 h-1" style="width: ${100 - budgetEff}%"></div></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4 font-mono-tech">
+                                    <div class="bg-gray-800/50 p-3 rounded border border-gray-700">
+                                        <div class="text-xs text-gray-500 mb-1">VESSEL INTEGRITY</div>
+                                        <div class="text-xl text-white">${Math.floor(engine.vessel.health)}%</div>
+                                    </div>
+                                    <div class="bg-gray-800/50 p-3 rounded border border-gray-700">
+                                        <div class="text-xs text-gray-500 mb-1">REMAINING FUEL</div>
+                                        <div class="text-xl text-white">${Math.floor(engine.vessel.fuel)}%</div>
+                                    </div>
+                                    <div class="bg-gray-800/50 p-3 rounded border border-gray-700 flex justify-between items-center bg-blue-900/20 border-blue-800">
+                                        <span class="text-blue-400 font-bold">OVERALL SCORE</span>
+                                        <span class="text-3xl text-white font-bold tracking-wider">${score}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-4 justify-end border-t border-gray-700 pt-6">
+                                <button onclick="UI.renderMenu()" class="px-6 py-2 panel border border-gray-600 rounded text-gray-300 hover:text-white transition uppercase font-bold text-sm tracking-wider">Return to Main Menu</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        };
+
+        window.UI = UI;
+
+        // --- Utility Systems ---
+        function showModal(title, content, actions = []) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-content').innerText = content;
+            
+            const actionsContainer = document.getElementById('modal-actions');
+            actionsContainer.innerHTML = '';
+            
+            if (actions.length === 0) {
+                // Default dismiss button
+                actions.push({ text: 'Acknowledge', action: null });
+            }
+
+            actions.forEach(act => {
+                const btn = document.createElement('button');
+                btn.className = "px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded font-mono-tech border border-gray-600 transition";
+                btn.innerText = act.text;
+                btn.onclick = () => {
+                    document.getElementById('modal-container').classList.add('hidden');
+                    if (act.action) act.action();
+                };
+                actionsContainer.appendChild(btn);
+            });
+
+            document.getElementById('modal-container').classList.remove('hidden');
+        }
+
+        function showToast(msg, type='info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let color = 'bg-gray-800 border-gray-600';
+            if (type === 'error') color = 'bg-red-900 border-red-500';
+            if (type === 'success') color = 'bg-green-900 border-green-500';
+            if (type === 'warning') color = 'bg-yellow-900 border-yellow-500';
+
+            toast.className = `p-3 rounded border text-sm text-white font-mono-tech shadow-lg ${color} toast-enter-active`;
+            toast.innerText = msg;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.replace('toast-enter-active', 'toast-exit-active');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- Visual Effects ---
+        function initStarfield() {
+            const canvas = document.getElementById('starfield');
+            const ctx = canvas.getContext('2d');
+            let w, h;
+            let stars = [];
+
+            const resize = () => {
+                w = canvas.width = window.innerWidth;
+                h = canvas.height = window.innerHeight;
+            };
+            window.addEventListener('resize', resize);
+            resize();
+
+            for(let i=0; i<200; i++) {
+                stars.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    s: Math.random() * 2,
+                    speed: (Math.random() * 0.5) + 0.1
+                });
+            }
+
+            function animate() {
+                ctx.clearRect(0,0,w,h);
+                ctx.fillStyle = 'white';
+                stars.forEach(star => {
+                    ctx.globalAlpha = (Math.sin(Date.now() * 0.001 * star.speed) + 1) / 2 * 0.8 + 0.2;
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.s, 0, Math.PI*2);
+                    ctx.fill();
+                    star.y += star.speed * 0.5;
+                    if(star.y > h) star.y = 0;
+                });
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        function initClock() {
+            setInterval(() => {
+                const d = new Date();
+                document.getElementById('clock').innerText = "T+ " + d.toISOString().substr(11, 8);
+            }, 1000);
+        }
+
+        // --- Initialization ---
+        async function init() {
+            initStarfield();
+            initClock();
+            
+            // Render initial state (Menu)
+            UI.renderMenu();
+
+            // GitHub Pages is a static host: use localStorage for save/load.
+            const authStatus = document.getElementById('auth-status');
+            authStatus.innerText = 'LOCAL TELEMETRY STORAGE';
+            authStatus.className = 'text-yellow-400';
+        }
+
+        window.onload = init;
+
+    </script>
+</body>
+</html>
