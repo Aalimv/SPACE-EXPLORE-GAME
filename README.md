@@ -18,7 +18,7 @@ The game stores the current mission in browser `localStorage` under `spaceExplor
 4. Under **Build and deployment**, choose **Deploy from a branch**.
 5. Choose branch `main` and folder `/ (root)`, then click **Save**.
 6. Wait for GitHub Pages to finish publishing. The URL will be:
-   `https://Aalimv.github.io/nasa-space-explorer/`
+   `https://aalimv.github.io/SPACE-EXPLORE-GAME/`
 
 No build command or backend server is required.
 
