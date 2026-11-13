@@ -12,7 +12,7 @@ The game stores the current mission in browser `localStorage` under `spaceExplor
 
 ## Publish with GitHub Pages
 
-1. Create a **public** GitHub repository named `nasa-space-explorer`.
+1. Create a **public** GitHub repository named `SPACE-EXPLORE-GAME`.
 2. Upload `index.html` and `README.md` to the repository root (do not put them inside another folder).
 3. Open **Settings → Pages**.
 4. Under **Build and deployment**, choose **Deploy from a branch**.
